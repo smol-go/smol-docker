@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"syscall"
 )
 
 func main() {
@@ -37,6 +39,19 @@ func main() {
 
 func run(args []string) {
 	fmt.Printf("Running %v \n", args)
+
+	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+	}
+
+	err := cmd.Run()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func child(args []string) {
