@@ -1,30 +1,48 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 )
 
-// docker 				run image <cmd> <params>
-// go run src/main.go	run 	  <cmd> <params>
-
 func main() {
+	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
+	buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
+
+	if len(os.Args) <= 1 {
+		fmt.Println("please enter a valid subcommand.")
+		os.Exit(1)
+	}
+
 	switch os.Args[1] {
 	case "run":
-		run()
+		runCmd.Parse(os.Args[2:])
+		arg := runCmd.Args()
+		run(arg)
+	case "child":
+		runCmd.Parse(os.Args[2:])
+		arg := runCmd.Args()
+		child(arg)
+	case "build":
+		tag := buildCmd.String("tag", "", "Name of container image")
+		path := buildCmd.String("path", "", "Path to ContainerFile")
+		buildCmd.Parse(os.Args[2:])
+		build(*tag, *path)
 	default:
-		panic("bad error")
+		fmt.Printf("invalid subcommand %s", os.Args[1])
+		os.Exit(1)
 	}
 }
 
-func run() {
-	fmt.Printf("Running %v\n", os.Args[2:])
+func run(args []string) {
+	fmt.Printf("Running %v \n", args)
+}
 
-	cmd := exec.Command(os.Args[2], os.Args[3:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+func child(args []string) {
+	fmt.Printf("Running from proc in namespace %v \n", args)
+}
 
-	cmd.Run()
+func build(tag, path string) {
+	fmt.Printf("running build with tag: %s and %s", tag, path)
 }
