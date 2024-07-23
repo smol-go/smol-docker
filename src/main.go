@@ -144,12 +144,12 @@ func cgroup() error {
 		if err != nil {
 			return err
 		}
-		//ioutil.WriteFile (add proc to cgroup)
+		//os.WriteFile (add proc to cgroup)
 		err = os.WriteFile(filepath.Join(l.path, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
 		if err != nil {
 			return err
 		}
-		//ioutil.WriteFile notify_on-release
+		//os.WriteFile notify_on-release
 		err = os.WriteFile(filepath.Join(l.path, "notify_on_release"), []byte("1"), 0700)
 		if err != nil {
 			return err
