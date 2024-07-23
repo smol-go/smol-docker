@@ -67,8 +67,24 @@ func child(args []string) {
 		panic(err)
 	}
 
+	if err = syscall.Chroot("ubuntu-rootfs/"); err != nil {
+		panic(err)
+	}
+
+	if err = syscall.Chdir("/"); err != nil {
+		panic(err)
+	}
+
+	if err = syscall.Mount("proc", "proc", "proc", 0, ""); err != nil {
+		panic(err)
+	}
+
 	err = cmd.Run()
 	if err != nil {
+		panic(err)
+	}
+
+	if err = syscall.Unmount("proc", 0); err != nil {
 		panic(err)
 	}
 }
