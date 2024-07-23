@@ -56,6 +56,21 @@ func run(args []string) {
 
 func child(args []string) {
 	fmt.Printf("Running from proc in namespace %v \n", args)
+
+	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := syscall.Sethostname([]byte("container"))
+	if err != nil {
+		panic(err)
+	}
+
+	err = cmd.Run()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func build(tag, path string) {
