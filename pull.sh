@@ -12,4 +12,4 @@ docker rm "$container" > /dev/null
 
 docker inspect -f '{{.Config.Cmd}}' "$image:latest" | tr -d '[]\n' > "./assets/${image}-cmd"
 
-echo "Image content stored in assets/${image}.tar.gz"
+echo "Image content stored in assets/${image}.tar.gz"`
