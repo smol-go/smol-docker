@@ -2,7 +2,6 @@
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
-GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 BINARY_NAME=smol-docker
 
@@ -10,7 +9,7 @@ DIST_FOLDER=dist
 
 build:
 		$(GOBUILD) -o $(BINARY_NAME) -v
-clean: 
+clean:
 		$(GOCLEAN)
 		rm -rf $(DIST_FOLDER)
 build-all:
