@@ -1,93 +1,55 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
-	"regexp"
 	"syscall"
-
-	"github.com/codeclysm/extract"
 )
-
-func must(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func createTempDir(name string) string {
-	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
-	prefix := nonAlphanumericRegex.ReplaceAllString(name, "_")
-	dir, err := os.MkdirTemp("", prefix)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return dir
-}
-
-func unTar(source string, destination string) error {
-	r, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	ctx := context.Background()
-	return extract.Archive(ctx, r, destination, nil)
-}
-
-func chroot(root string, call string) {
-	fmt.Printf("Running %s in %s\n", call, root)
-	cmd := exec.Command(call)
-	must(syscall.Chroot(root))
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	must(cmd.Run())
-}
-
-func pullImage(image string) {
-	cmd := exec.Command("./pull", image)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	must(cmd.Run())
-}
 
 func main() {
 	switch os.Args[1] {
 	case "run":
-		image := os.Args[2]
-		tar := fmt.Sprintf("./assets/%s.tar.gz", image)
-
-		if _, err := os.Stat(tar); errors.Is(err, os.ErrNotExist) {
-			panic(err)
-		}
-
-		cmd := ""
-		if len(os.Args) > 3 {
-			cmd = os.Args[3]
-		} else {
-			buf, err := os.ReadFile(fmt.Sprintf("./assets/%s-cmd", image))
-			if err != nil {
-				panic(err)
-			}
-			cmd = string(buf)
-		}
-
-		dir := createTempDir(tar)
-		defer os.RemoveAll(dir)
-		must(unTar(tar, dir))
-		chroot(dir, cmd)
-	case "pull":
-		image := os.Args[2]
-		pullImage(image)
+		run()
+	case "child":
+		child()
 	default:
-		panic("some error occured")
+		panic("Invalid command")
+	}
+}
+
+func run() {
+	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error running the container process: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func child() {
+	fmt.Printf("Running container process as PID %d\n", os.Getpid())
+
+	must(syscall.Mount("none", "/", "", syscall.MS_REC|syscall.MS_PRIVATE, ""))
+
+	must(syscall.Sethostname([]byte("container")))
+
+	if err := syscall.Exec(os.Args[2], os.Args[2:], os.Environ()); err != nil {
+		fmt.Printf("Error executing command: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
 	}
 }
