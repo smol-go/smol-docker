@@ -11,8 +11,12 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		run()
-	case "child":
-		child()
+	case "pull":
+		var image string
+		if len(os.Args) > 2 {
+			image = os.Args[2]
+		}
+		pullImage(image)
 	default:
 		panic("Invalid command")
 	}
@@ -35,17 +39,14 @@ func run() {
 	}
 }
 
-func child() {
-	fmt.Printf("Running container process as PID %d\n", os.Getpid())
+func pullImage(image string) {
+	cmd := exec.Command("./pull.sh", image)
 
-	must(syscall.Mount("none", "/", "", syscall.MS_REC|syscall.MS_PRIVATE, ""))
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	must(syscall.Sethostname([]byte("container")))
-
-	if err := syscall.Exec(os.Args[2], os.Args[2:], os.Environ()); err != nil {
-		fmt.Printf("Error executing command: %v\n", err)
-		os.Exit(1)
-	}
+	must(cmd.Run())
 }
 
 func must(err error) {

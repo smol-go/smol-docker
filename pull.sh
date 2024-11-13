@@ -6,22 +6,21 @@ defaultImage="hello-world"
 folder="dumps"
 
 image="${1:-$defaultImage}"
+imageFolder="${folder}/${image}"
 
-echo "Creating a folder '$folder' for storing files..."
-mkdir -p ${folder} || handle_error "Failed to create ${folder} directory"
+mkdir -p ${folder}
 
-echo "Creating temporary container from image '$image'..."
+echo "Creating image-specific folder '$imageFolder'..."
+mkdir -p ${imageFolder}
+
 container=$(docker create "$image")
 
-echo "Extracting image '$image' to '${folder}/${image}.tar.gz'..."
-docker export "$container" -o "./${folder}/${image}.tar.gz" > /dev/null
+docker export "$container" -o "./${imageFolder}/${image}.tar.gz" > /dev/null
 
-echo "Extracting default command configuration..."
-docker inspect -f '{{.Config.Cmd}}' "$image:latest" | tr -d '[]\n' > "./${folder}/${image}-cmd"
+docker inspect -f '{{.Config.Cmd}}' "$image:latest" | tr -d '[]\n' > "${imageFolder}/${image}-cmd"
 
-echo "Cleaning up temporary container..."
 docker rm "$container" > /dev/null
 
-echo "Image content stored in ${folder}/${image}.tar.gz"
-echo "Command configuration stored in ${folder}/${image}-cmd"
+echo "Image content stored in ${imageFolder}/${image}.tar.gz"
+echo "Command configuration stored in ${imageFolder}/${image}-cmd"
 echo "Done."
