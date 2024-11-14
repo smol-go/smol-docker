@@ -37,14 +37,12 @@ func NewContainer(image, command string) *Container {
 }
 
 func (c *Container) Setup() error {
-	// Create temp directory
 	tempDir, err := c.createTempDir()
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	c.TempDir = tempDir
 
-	// Extract image
 	tarPath := filepath.Join(c.RootDir, fmt.Sprintf("%s.tar.gz", c.Image))
 	if err := c.unpackImage(tarPath); err != nil {
 		return fmt.Errorf("failed to unpack image: %w", err)
@@ -56,13 +54,11 @@ func (c *Container) Setup() error {
 func (c *Container) Run() error {
 	defer c.Cleanup()
 
-	// Setup mount points
 	if err := c.setupMounts(); err != nil {
 		return fmt.Errorf("failed to setup mounts: %w", err)
 	}
 
-	// Execute chroot
-	if err := c.chroot(); err != nil {
+	if err := c.changeRoot(); err != nil {
 		return fmt.Errorf("failed to chroot: %w", err)
 	}
 
@@ -111,7 +107,6 @@ func (c *Container) unpackImage(tarPath string) error {
 }
 
 func (c *Container) setupMounts() error {
-	// Mount proc
 	procPath := filepath.Join(c.TempDir, "proc")
 	if err := os.MkdirAll(procPath, 0755); err != nil {
 		return fmt.Errorf("failed to create proc directory: %w", err)
@@ -124,21 +119,18 @@ func (c *Container) setupMounts() error {
 	return nil
 }
 
-func (c *Container) chroot() error {
-	// Save old root for cleanup
+func (c *Container) changeRoot() error {
 	oldRoot, err := os.Open("/")
 	if err != nil {
 		return fmt.Errorf("failed to open root: %w", err)
 	}
 	defer oldRoot.Close()
 
-	// Setup command
 	cmd := exec.Command(c.Command)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Change to new root
 	if err := syscall.Chdir(c.TempDir); err != nil {
 		return fmt.Errorf("failed to change directory: %w", err)
 	}
@@ -147,12 +139,10 @@ func (c *Container) chroot() error {
 		return fmt.Errorf("failed to chroot: %w", err)
 	}
 
-	// Run command
 	if err := cmd.Run(); err != nil {
 		log.Printf("Command failed: %v", err)
 	}
 
-	// Restore old root
 	if err := syscall.Fchdir(int(oldRoot.Fd())); err != nil {
 		return fmt.Errorf("failed to restore old root directory: %w", err)
 	}

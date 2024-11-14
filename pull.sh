@@ -10,8 +10,12 @@ imageFolder="${folder}/${image}"
 
 mkdir -p ${folder}
 
-echo "Creating image-specific folder '$imageFolder'..."
-mkdir -p ${imageFolder}
+if [ -d "$imageFolder" ]; then
+    echo "Folder '$imageFolder' already exists"
+else
+    echo "Creating image-specific folder '$imageFolder'..."
+    mkdir -p ${imageFolder}
+fi
 
 container=$(docker create "$image")
 
