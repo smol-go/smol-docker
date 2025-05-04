@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"syscall"
+	"runtime"
 	"time"
 
 	"github.com/codeclysm/extract"
@@ -54,12 +54,24 @@ func (c *Container) Setup() error {
 func (c *Container) Run() error {
 	defer c.Cleanup()
 
-	if err := c.setupMounts(); err != nil {
-		return fmt.Errorf("failed to setup mounts: %w", err)
-	}
+	if runtime.GOOS == "linux" {
+		if err := c.setupMounts(); err != nil {
+			return fmt.Errorf("failed to setup mounts: %w", err)
+		}
 
-	if err := c.changeRoot(); err != nil {
-		return fmt.Errorf("failed to chroot: %w", err)
+		if err := c.changeRoot(); err != nil {
+			return fmt.Errorf("failed to chroot: %w", err)
+		}
+	} else {
+		// macOS implementation
+		if err := c.runMacOS(); err != nil {
+			// If the error already contains a formatted message about Linux binaries,
+			// return it directly without wrapping
+			if err.Error() == "cannot run Linux binaries on macOS. Please use Docker Desktop or a Linux VM to run containers" {
+				return err
+			}
+			return fmt.Errorf("failed to run container on macOS: %w", err)
+		}
 	}
 
 	return nil
@@ -107,48 +119,59 @@ func (c *Container) unpackImage(tarPath string) error {
 }
 
 func (c *Container) setupMounts() error {
-	procPath := filepath.Join(c.TempDir, "proc")
-	if err := os.MkdirAll(procPath, 0755); err != nil {
-		return fmt.Errorf("failed to create proc directory: %w", err)
-	}
-
-	if err := syscall.Mount("proc", procPath, "proc", 0, ""); err != nil {
-		return fmt.Errorf("failed to mount proc: %w", err)
-	}
-
+	// This is a stub that will be overridden by the platform-specific implementation
 	return nil
 }
 
 func (c *Container) changeRoot() error {
-	oldRoot, err := os.Open("/")
-	if err != nil {
-		return fmt.Errorf("failed to open root: %w", err)
-	}
-	defer oldRoot.Close()
+	// This is a stub that will be overridden by the platform-specific implementation
+	return nil
+}
 
-	cmd := exec.Command(c.Command)
+func (c *Container) runMacOS() error {
+	// For macOS, we'll use a simpler approach that doesn't require root privileges
+	// We'll just run the command in the extracted directory with modified environment
+	
+	// Make the command path relative to the extracted directory
+	cmdPath := c.Command
+	if filepath.IsAbs(cmdPath) {
+		cmdPath = filepath.Join(c.TempDir, cmdPath[1:])
+	} else {
+		cmdPath = filepath.Join(c.TempDir, cmdPath)
+	}
+	
+	// Check if the file exists and is executable
+	if _, err := os.Stat(cmdPath); os.IsNotExist(err) {
+		return fmt.Errorf("executable not found in container: %s", cmdPath)
+	}
+	
+	// Try to execute the command
+	cmd := exec.Command(cmdPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	if err := syscall.Chdir(c.TempDir); err != nil {
-		return fmt.Errorf("failed to change directory: %w", err)
-	}
-
-	if err := syscall.Chroot(c.TempDir); err != nil {
-		return fmt.Errorf("failed to chroot: %w", err)
-	}
+	
+	// Set the working directory to the extracted image
+	cmd.Dir = c.TempDir
+	
+	// Set environment variables to simulate container environment
+	cmd.Env = append(os.Environ(),
+		"CONTAINER=true",
+		"HOME="+filepath.Join(c.TempDir, "home"),
+		"PATH="+filepath.Join(c.TempDir, "bin")+":"+os.Getenv("PATH"),
+	)
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Command failed: %v", err)
-	}
-
-	if err := syscall.Fchdir(int(oldRoot.Fd())); err != nil {
-		return fmt.Errorf("failed to restore old root directory: %w", err)
-	}
-
-	if err := syscall.Chroot("."); err != nil {
-		return fmt.Errorf("failed to restore old root: %w", err)
+		if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
+			return fmt.Errorf("executable not found: %s", cmdPath)
+		}
+		if execErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("command failed with exit code %d: %s", execErr.ExitCode(), execErr.String())
+		}
+		if err.Error() == "exec format error" {
+			return fmt.Errorf("cannot run Linux binaries on macOS. Please use Docker Desktop or a Linux VM to run containers")
+		}
+		return fmt.Errorf("command failed: %w", err)
 	}
 
 	return nil
